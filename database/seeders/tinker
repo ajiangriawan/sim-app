@@ -1,0 +1,19 @@
+use App\Models\User;
+
+$admin = User::create([
+    'name' => 'Admin',
+    'email' => 'admin@sim-app.test',
+    'alamat' => 'Palembang',
+    'no_telp' => '082112344123',
+    'password' => bcrypt('password'),
+]);
+$admin->assignRole('admin');
+
+$direktur = User::create([
+    'name' => 'Direktur',
+    'email' => 'direktur@sim-app.test',
+    'alamat' => 'Palembang',
+    'no_telp' => '082112344123',
+    'password' => bcrypt('password'),
+]);
+$direktur->assignRole('direktur');
