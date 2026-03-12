@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('vehicles', function (Blueprint $table) {
             $table->id();
             $table->foreignId('driver_id')->nullable()->constrained()->nullOnDelete();
+            $table->string('partai')->unique();
             $table->string('no_lambung')->unique();
             $table->string('no_plat')->unique();
             $table->string('kapasitas');

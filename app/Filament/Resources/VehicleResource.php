@@ -29,6 +29,23 @@ class VehicleResource extends Resource
                             ->label('Apakah Vendor?')
                             ->onColor('warning') // Warna saat aktif (Vendor)
                             ->default(false),    // Default Inti
+                        Forms\Components\Select::make('partai')
+                            ->label('Partai')
+                            ->options(
+                                Vehicle::query()
+                                    ->distinct()
+                                    ->pluck('partai', 'partai')
+                                    ->toArray()
+                            )
+                            ->searchable()
+                            ->required()
+                            // Fitur untuk menambah nama baru langsung dari select
+                            ->createOptionForm([
+                                Forms\Components\TextInput::make('partai')
+                                    ->label('Nama Pihak Baru')
+                                    ->required(),
+                            ])
+                            ->createOptionUsing(fn(array $data) => $data['partai']),
                         Forms\Components\TextInput::make('no_plat')
                             ->label('Nomor Plat')
                             ->required()
@@ -76,6 +93,11 @@ class VehicleResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('no_lambung')
                     ->label('No. Lambung')
+                    ->searchable()
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('partai')
+                    ->label('Partai')
                     ->searchable()
                     ->sortable(),
 

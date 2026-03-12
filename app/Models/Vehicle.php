@@ -9,6 +9,7 @@ class Vehicle extends Model
     //
     protected $fillable = [
         'driver_id',
+        'partai',
         'no_lambung',
         'no_plat',
         'kapasitas',

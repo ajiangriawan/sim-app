@@ -26,7 +26,11 @@ class LaporanPettyCash extends Page
 
     public function mount(): void
     {
-        $this->form->fill();
+        $this->form->fill([
+            'kategori' => 'inti',
+            'dari' => now()->startOfMonth()->format('Y-m-d'),
+            'sampai' => now()->endOfMonth()->format('Y-m-d'),
+        ]);
     }
 
     public function form(Form $form): Form

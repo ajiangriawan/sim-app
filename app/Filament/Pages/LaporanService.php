@@ -28,8 +28,9 @@ class LaporanService extends Page
     public function mount(): void
     {
         $this->form->fill([
+            'kategori' => 'inti',
             'dari' => now()->startOfMonth()->format('Y-m-d'),
-            'sampai' => now()->format('Y-m-d'),
+            'sampai' => now()->endOfMonth()->format('Y-m-d'),
         ]);
     }
 
@@ -40,16 +41,17 @@ class LaporanService extends Page
                 Section::make('Filter Laporan')
                     ->description('Tentukan periode dan parameter laporan yang ingin diunduh.')
                     ->schema([
+                        Select::make('workshop_id')
+                            ->label('Bengkel')
+                            ->options(Workshop::pluck('nama_bengkel', 'id'))
+                            ->placeholder('Semua Bengkel'),
                         DatePicker::make('dari')
                             ->label('Tanggal Mulai')
                             ->required(),
                         DatePicker::make('sampai')
                             ->label('Tanggal Selesai')
                             ->required(),
-                        Select::make('workshop_id')
-                            ->label('Bengkel')
-                            ->options(Workshop::pluck('nama_bengkel', 'id'))
-                            ->placeholder('Semua Bengkel'),
+                        
                     ])->columns(3),
             ])
             ->statePath('data');

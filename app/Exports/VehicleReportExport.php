@@ -46,7 +46,6 @@ class VehicleReportExport implements
 
     public function collection()
     {
-        // Query mengambil semua transaksi tanpa memfilter is_vendor unit
         $query = DB::table('transactions as t')
             ->join('vehicles as v', 'v.id', '=', 't.vehicle_id')
             ->join('drivers as d', 'd.id', '=', 'v.driver_id')
@@ -63,14 +62,16 @@ class VehicleReportExport implements
 
         return $query->select([
             't.tanggal',
+            't.no_sjb',          // Tambahan No SJB
             'v.no_lambung as kendaraan',
             'd.nama as driver',
+            'r.nama_rute',       // Tambahan Nama Rute
             't.tonase',
             't.uang_jalan',
             't.bonus_tonase',
             't.insentif',
-            't.harga_tonase_pusat',  // Harga simpanan saat transaksi
-            't.harga_tonase_vendor', // Harga simpanan saat transaksi
+            't.harga_tonase_pusat',
+            't.harga_tonase_vendor',
             'r.jarak as master_jarak',
             'r.uang_jalan as master_uang_jalan',
             DB::raw('IFNULL(s.total_biaya, 0) as service'),
@@ -81,16 +82,12 @@ class VehicleReportExport implements
 
     public function map($row): array
     {
-        // 1. Tentukan harga satuan berdasarkan pilihan user di filter awal
-        // Jika pilih Vendor ($this->isVendor = 1), gunakan harga_tonase_vendor
         $hargaSatuan = $this->isVendor 
             ? ($row->harga_tonase_vendor ?? 0) 
             : ($row->harga_tonase_pusat ?? 0);
 
-        // 2. Kalkulasi Pendapatan (Omset) secara dinamis
         $pendapatanKotor = $row->tonase * $hargaSatuan * $row->master_jarak;
 
-        // 3. Logika Biaya
         $uangJalan = $row->uang_jalan > 0 ? $row->uang_jalan : $row->master_uang_jalan;
         $bonus = $row->bonus_tonase ?? 0;
         $insentif = $row->insentif ?? 0;
@@ -102,8 +99,10 @@ class VehicleReportExport implements
         return [
             $this->rowNumber++,
             $row->tanggal,
+            $row->no_sjb,        // Mapping No SJB
             $row->kendaraan,
             $row->driver,
+            $row->nama_rute,     // Mapping Rute
             $row->tonase,
             $hargaSatuan,
             round($pendapatanKotor),
@@ -124,8 +123,10 @@ class VehicleReportExport implements
             [
                 'No',
                 'Tanggal',
+                'No. SJB',       // Heading No SJB
                 'Kendaraan',
                 'Driver',
+                'Rute',          // Heading Rute
                 'Tonase',
                 'Harga Satuan',
                 'Pendapatan (Omset)',
@@ -158,39 +159,39 @@ class VehicleReportExport implements
                 $highestRow = $sheet->getHighestRow();
                 $totalRow = $highestRow + 1;
 
-                // Merge Header
-                $sheet->mergeCells('A1:K1');
-                $sheet->mergeCells('A2:K2');
+                // Update Merge Header (A sampai M karena kolom bertambah 2)
+                $sheet->mergeCells('A1:M1');
+                $sheet->mergeCells('A2:M2');
                 $sheet->getStyle('A1:A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
                 // Baris TOTAL
-                $sheet->mergeCells("A{$totalRow}:D{$totalRow}");
+                $sheet->mergeCells("A{$totalRow}:F{$totalRow}");
                 $sheet->setCellValue("A{$totalRow}", 'TOTAL KESELURUHAN');
 
-                // Rumus SUM
-                // E: Tonase, G: Pendapatan, H: Uang Jalan, I: Bonus, J: Insentif, K: Net
-                $columns = ['E', 'G', 'H', 'I', 'J', 'K'];
+                // Update Rumus SUM
+                // G: Tonase, I: Pendapatan, J: Uang Jalan, K: Bonus, L: Insentif, M: Net
+                $columns = ['G', 'I', 'J', 'K', 'L', 'M'];
                 foreach ($columns as $col) {
                     $sheet->setCellValue("{$col}{$totalRow}", "=SUM({$col}5:{$col}{$highestRow})");
                 }
 
                 // Styling Total
-                $sheet->getStyle("A{$totalRow}:K{$totalRow}")->applyFromArray([
+                $sheet->getStyle("A{$totalRow}:M{$totalRow}")->applyFromArray([
                     'font' => ['bold' => true],
                     'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFFF00']],
                     'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
                 ]);
 
-                // Format Rupiah (Kolom F sampai K)
-                $sheet->getStyle("F5:K{$totalRow}")
+                // Format Rupiah (Kolom H sampai M)
+                $sheet->getStyle("H5:M{$totalRow}")
                     ->getNumberFormat()
                     ->setFormatCode('_("Rp"* #,##0_);_("Rp"* (#,##0);_("Rp"* "-"??_);_(@_)');
 
-                // Format Tonase (E)
-                $sheet->getStyle("E5:E{$totalRow}")->getNumberFormat()->setFormatCode('#,##0.00');
+                // Format Tonase (G)
+                $sheet->getStyle("G5:G{$totalRow}")->getNumberFormat()->setFormatCode('#,##0.00');
 
                 // Border Seluruh Data
-                $sheet->getStyle("A4:K{$totalRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+                $sheet->getStyle("A4:M{$totalRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
             }
         ];
     }

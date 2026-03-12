@@ -22,21 +22,17 @@ class TransactionResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-document-check';
     protected static ?string $navigationGroup = 'Hauling';
     protected static ?string $pluralLabel = 'Input Data Transaksi';
-    protected static ?int $navigationSort = 1;
 
     public static function form(Form $form): Form
     {
         return $form->schema([
-
             /*
             |--------------------------------------------------------------------------
             | INFORMASI UTAMA
             |--------------------------------------------------------------------------
             */
-
             Forms\Components\Section::make('Informasi Utama & Operasional')
                 ->schema([
-
                     Forms\Components\TextInput::make('no_sjb')
                         ->label('No. SJB')
                         ->required()
@@ -52,7 +48,10 @@ class TransactionResource extends Resource
                         ->searchable()
                         ->preload()
                         ->required()
-                        ->live(),
+                        ->live()
+                        // Memicu kalkulasi saat Edit (Hydrated) dan Update
+                        ->afterStateHydrated(fn(Set $set, $state, Get $get) => self::syncVehicleData($set, $state, $get))
+                        ->afterStateUpdated(fn(Set $set, $state, Get $get) => self::syncVehicleData($set, $state, $get)),
 
                     Forms\Components\Select::make('rute_id')
                         ->label('Rute Perjalanan')
@@ -61,43 +60,23 @@ class TransactionResource extends Resource
                         ->preload()
                         ->required()
                         ->live()
-                        ->afterStateHydrated(function (Set $set, $state) {
-                            if (!$state) return;
-                            $rute = Rute::find($state);
-                            if (!$rute) return;
-                            self::setRuteData($set, $rute);
-                        })
-                        ->afterStateUpdated(function (Set $set, $state, Get $get) {
-                            if (!$state) return;
-                            $rute = Rute::find($state);
-                            if (!$rute) return;
-                            self::setRuteData($set, $rute);
-                            self::calculateRevenue($get, $set);
-                        }),
+                        // Memicu kalkulasi saat Edit (Hydrated) dan Update
+                        ->afterStateHydrated(fn(Set $set, $state, Get $get) => self::syncRuteData($set, $state, $get))
+                        ->afterStateUpdated(fn(Set $set, $state, Get $get) => self::syncRuteData($set, $state, $get)),
 
                     Forms\Components\TextInput::make('tonase')
                         ->label('Tonase (Ton)')
                         ->numeric()
                         ->required()
                         ->live(onBlur: true)
-                        ->afterStateUpdated(
-                            fn(Get $get, Set $set) =>
-                            self::calculateRevenue($get, $set)
-                        ),
+                        ->afterStateUpdated(fn(Get $get, Set $set) => self::calculateRevenue($get, $set)),
 
                     Forms\Components\Select::make('status')
-                        ->options([
-                            'selesai' => 'Selesai',
-                            'batal' => 'Batal',
-                        ])
+                        ->options(['selesai' => 'Selesai', 'batal' => 'Batal'])
                         ->default('selesai')
                         ->required()
                         ->live()
-                        ->afterStateUpdated(
-                            fn(Get $get, Set $set) =>
-                            self::calculateRevenue($get, $set)
-                        ),
-
+                        ->afterStateUpdated(fn(Get $get, Set $set) => self::calculateRevenue($get, $set)),
                 ])->columns(2),
 
             /*
@@ -105,166 +84,115 @@ class TransactionResource extends Resource
             | KEUANGAN & SALDO
             |--------------------------------------------------------------------------
             */
-
             Forms\Components\Section::make('Keuangan & Saldo')
                 ->schema([
-
                     Forms\Components\Toggle::make('pakai_deposit')
                         ->label('Potong Saldo Deposit?')
                         ->default(true)
+                        ->live(),
+
+                    Forms\Components\Toggle::make('hitung_bonus')
+                        ->label('Hitung Bonus Tonase?')
+                        ->default(true)
                         ->live()
-                        ->columnSpanFull(),
+                        ->afterStateUpdated(fn(Get $get, Set $set) => self::calculateRevenue($get, $set)),
 
                     Forms\Components\Select::make('nama_deposit_pilihan')
                         ->label('Pilih Saldo Atas Nama')
-                        ->options(
-                            Deposit::query()
-                                ->distinct()
-                                ->pluck('nama_pihak', 'nama_pihak')
-                                ->toArray()
-                        )
-                        ->searchable()
+                        ->options(Deposit::query()->distinct()->pluck('nama_pihak', 'nama_pihak')->toArray())
                         ->visible(fn(Get $get) => $get('pakai_deposit'))
                         ->required(fn(Get $get) => $get('pakai_deposit'))
+                        ->searchable()
                         ->live(),
 
-                    Forms\Components\Placeholder::make('saldo_sebelum')
-                        ->label('Saldo Sebelum Dipotong')
-                        ->visible(
-                            fn(Get $get) =>
-                            $get('pakai_deposit') && $get('nama_deposit_pilihan')
-                        )
+                    Forms\Components\Placeholder::make('info_saldo')
+                        ->label('Informasi Saldo')
+                        ->visible(fn(Get $get) => $get('pakai_deposit') && $get('nama_deposit_pilihan'))
                         ->content(function (Get $get) {
-
                             $nama = $get('nama_deposit_pilihan');
-                            if (!$nama) return '-';
-
-                            $saldo = Deposit::getSaldoPerNama($nama);
-
-                            return new HtmlString(
-                                "<span class='font-bold text-primary-600'>Rp " .
-                                    number_format((int) $saldo, 0, ',', '.') .
-                                    "</span>"
-                            );
-                        }),
-
-                    Forms\Components\Placeholder::make('jumlah_potongan')
-                        ->label('Jumlah Potongan (Uang Jalan)')
-                        ->visible(
-                            fn(Get $get) =>
-                            $get('pakai_deposit') && $get('nama_deposit_pilihan')
-                        )
-                        ->content(function (Get $get) {
-
-                            $potongan = (int) ($get('uang_jalan') ?? 0);
-
-                            return new HtmlString(
-                                "<span class='font-bold text-warning-600'>Rp " .
-                                    number_format($potongan, 0, ',', '.') .
-                                    "</span>"
-                            );
-                        }),
-
-                    Forms\Components\Placeholder::make('saldo_setelah')
-                        ->label('Saldo Setelah Dipotong')
-                        ->visible(
-                            fn(Get $get) =>
-                            $get('pakai_deposit') && $get('nama_deposit_pilihan')
-                        )
-                        ->content(function (Get $get) {
-
-                            $nama = $get('nama_deposit_pilihan');
-                            if (!$nama) return '-';
-
-                            $saldo = Deposit::getSaldoPerNama($nama);
+                            $saldo = $nama ? Deposit::getSaldoPerNama($nama) : 0;
                             $potongan = (int) ($get('uang_jalan') ?? 0);
                             $sisa = $saldo - $potongan;
+                            $color = $sisa < 0 ? 'text-danger-600' : 'text-success-600';
 
-                            $color = $sisa < 0
-                                ? 'text-danger-600'
-                                : 'text-success-600';
-
-                            return new HtmlString(
-                                "<span class='font-bold {$color}'>Rp " .
-                                    number_format($sisa, 0, ',', '.') .
-                                    "</span>"
-                            );
+                            return new HtmlString("
+                                <div class='text-sm'>
+                                    Saldo: <span class='font-bold text-primary-600'>Rp " . number_format($saldo, 0, ',', '.') . "</span><br>
+                                    Sisa: <span class='font-bold {$color}'>Rp " . number_format($sisa, 0, ',', '.') . "</span>
+                                </div>
+                            ");
                         }),
-
                 ])->columns(3),
-
 
             /*
             |--------------------------------------------------------------------------
-            | HASIL PERHITUNGAN OTOMATIS
+            | HASIL PERHITUNGAN
             |--------------------------------------------------------------------------
             */
-
             Forms\Components\Section::make('Hasil Perhitungan (Otomatis)')
                 ->schema([
-
                     self::currencyPlaceholder('pendapatan_kotor', 'Omset (Pusat)'),
                     self::currencyPlaceholder('pendapatan_bersih', 'Net Income (Laba)'),
                     self::currencyPlaceholder('bonus_tonase', 'Bonus Tonase'),
 
-                    // FIELD YANG MASUK KE DATABASE
+                    // State-only Hidden Fields (Tidak masuk DB tapi bantu hitung)
+                    Forms\Components\Hidden::make('partai_hidden'),
+                    Forms\Components\Hidden::make('harga_tonase_hidden'),
+                    Forms\Components\Hidden::make('jarak_hidden'),
+                    Forms\Components\Hidden::make('insentif_hidden'),
+
+                    // Real Database Hidden Fields
                     Forms\Components\Hidden::make('harga_tonase_pusat'),
                     Forms\Components\Hidden::make('harga_tonase_vendor'),
                     Forms\Components\Hidden::make('pendapatan_kotor'),
                     Forms\Components\Hidden::make('pendapatan_bersih'),
                     Forms\Components\Hidden::make('bonus_tonase'),
-                    Forms\Components\Hidden::make('harga_tonase_hidden'),
-                    Forms\Components\Hidden::make('jarak_hidden'),
-                    Forms\Components\Hidden::make('insentif_hidden'),
                     Forms\Components\Hidden::make('uang_jalan'),
                     Forms\Components\Hidden::make('uang_makan'),
                     Forms\Components\Hidden::make('insentif'),
-                    Forms\Components\Hidden::make('bahan_bakar'),
-                    Forms\Components\Hidden::make('pungli'),
-
                 ])->columns(3),
-
         ]);
     }
 
-    protected static function setRuteData(Set $set, $rute): void
+    // Helper: Sinkronisasi Data Kendaraan
+    protected static function syncVehicleData(Set $set, $state, Get $get): void
     {
-        $set('harga_tonase_pusat', $rute->harga_tonase_pusat ?? 0);
-        $set('harga_tonase_vendor', $rute->harga_tonase_vendor ?? 0);
-        $set('harga_tonase_hidden', $rute->harga_tonase_pusat ?? 0);
-        $set('jarak_hidden', $rute->jarak ?? 0);
-        $set('insentif_hidden', $rute->insentif ?? 0);
-        $set('uang_jalan', $rute->uang_jalan ?? 0);
-        $set('uang_makan', $rute->uang_makan ?? 0);
-        $set('insentif', $rute->insentif ?? 0);
-        $set('bahan_bakar', $rute->bahan_bakar ?? 0);
-        $set('pungli', $rute->pungli ?? 0);
+        if ($state) {
+            $vehicle = Vehicle::find($state);
+            $set('partai_hidden', $vehicle?->partai);
+        }
+        self::calculateRevenue($get, $set);
     }
 
-    protected static function currencyPlaceholder(string $field, string $label)
+    // Helper: Sinkronisasi Data Rute
+    protected static function syncRuteData(Set $set, $state, Get $get): void
     {
-        return Forms\Components\Placeholder::make($field . '_view')
-            ->label($label)
-            ->content(
-                fn(Get $get) =>
-                'Rp ' . number_format(
-                    (int) ($get($field) ?? 0),
-                    0,
-                    ',',
-                    '.'
-                )
-            );
+        if ($state) {
+            $rute = Rute::find($state);
+            if ($rute) {
+                $set('harga_tonase_pusat', $rute->harga_tonase_pusat ?? 0);
+                $set('harga_tonase_vendor', $rute->harga_tonase_vendor ?? 0);
+                $set('harga_tonase_hidden', $rute->harga_tonase_pusat ?? 0);
+                $set('jarak_hidden', $rute->jarak ?? 0);
+                $set('insentif_hidden', $rute->insentif ?? 0);
+                $set('uang_jalan', $rute->uang_jalan ?? 0);
+                $set('uang_makan', $rute->uang_makan ?? 0);
+                $set('insentif', $rute->insentif ?? 0);
+            }
+        }
+        self::calculateRevenue($get, $set);
     }
 
     public static function calculateRevenue(Get $get, Set $set): void
     {
-        $status    = $get('status');
-        $tonase    = (float) ($get('tonase') ?? 0);
-        $harga     = (float) ($get('harga_tonase_hidden') ?? 0);
-        $jarak     = (float) ($get('jarak_hidden') ?? 0);
-        $uangJalan = (float) ($get('uang_jalan') ?? 0);
-        $isVendor  = (bool) $get('is_vendor');
-        $insentif  = (float) ($get('insentif_hidden') ?? 0);
+        $status      = $get('status');
+        $tonase      = (float) ($get('tonase') ?? 0);
+        $harga       = (float) ($get('harga_tonase_hidden') ?? 0);
+        $jarak       = (float) ($get('jarak_hidden') ?? 0);
+        $uangJalan   = (float) ($get('uang_jalan') ?? 0);
+        $insentif    = (float) ($get('insentif_hidden') ?? 0);
+        $partai      = $get('partai_hidden');
+        $hitungBonus = (bool) ($get('hitung_bonus') ?? true);
 
         if ($status === 'batal' || $harga <= 0 || $jarak <= 0) {
             $set('pendapatan_kotor', 0);
@@ -273,25 +201,40 @@ class TransactionResource extends Resource
             return;
         }
 
+        // 1. Hitung Omset
         $kotor = round($tonase * $jarak * $harga);
         $set('pendapatan_kotor', $kotor);
 
+        // 2. Hitung Bonus Partai
         $bonusTotal = 0;
-        if ($tonase > 30) {
-            $kelebihanTonase = $tonase - 30;
-            $tonUtuh = floor($kelebihanTonase);
-            $desimal = $kelebihanTonase - $tonUtuh;
+        if ($hitungBonus && $partai) {
+            $threshold = 0;
+            $partaiUpper = strtoupper($partai);
 
-            if ($desimal > 0.50) {
-                $tonUtuh += 1;
+            if (str_contains($partaiUpper, 'KAFA')) {
+                $threshold = 31.75;
+            } elseif (str_contains($partaiUpper, 'STL')) {
+                $threshold = 30.75;
             }
-            $bonusTotal = $tonUtuh * 30000;
-        }
 
+            if ($threshold > 0 && $tonase >= $threshold) {
+                $selisih = $tonase - ($threshold - 1);
+                $tonBonus = floor($selisih);
+                $bonusTotal = $tonBonus * 30000;
+            }
+        }
         $set('bonus_tonase', $bonusTotal);
 
+        // 3. Hitung Laba Bersih
         $bersih = $kotor - $uangJalan - $bonusTotal - $insentif;
         $set('pendapatan_bersih', round($bersih));
+    }
+
+    protected static function currencyPlaceholder(string $field, string $label)
+    {
+        return Forms\Components\Placeholder::make($field . '_view')
+            ->label($label)
+            ->content(fn(Get $get) => 'Rp ' . number_format((int)($get($field) ?? 0), 0, ',', '.'));
     }
 
     public static function table(Table $table): Table
@@ -301,31 +244,8 @@ class TransactionResource extends Resource
             Tables\Columns\TextColumn::make('tanggal')->date()->sortable(),
             Tables\Columns\TextColumn::make('vehicle.no_lambung')->label('Lambung'),
             Tables\Columns\TextColumn::make('tonase')->suffix(' Ton'),
-
-            Tables\Columns\TextColumn::make('pendapatan_kotor')
-                ->label('Gross Income')
-                ->formatStateUsing(
-                    fn($state) =>
-                    'Rp ' . number_format((int) $state, 0, ',', '.')
-                ),
-            Tables\Columns\TextColumn::make('pendapatan_bersih')
-                ->label('Net Income')
-                ->formatStateUsing(
-                    fn($state) =>
-                    'Rp ' . number_format((int) $state, 0, ',', '.')
-                ),
-            Tables\Columns\TextColumn::make('bonus_tonase')
-                ->label('Bonus')
-                ->formatStateUsing(
-                    fn($state) =>
-                    'Rp ' . number_format((int) $state, 0, ',', '.')
-                ),
-            Tables\Columns\TextColumn::make('insentif')
-                ->label('Insentif')
-                ->formatStateUsing(
-                    fn($state) =>
-                    'Rp ' . number_format((int) $state, 0, ',', '.')
-                ),
+            Tables\Columns\TextColumn::make('pendapatan_bersih')->label('Net')->money('IDR'),
+            Tables\Columns\TextColumn::make('bonus_tonase')->label('Bonus')->money('IDR'),
         ])
             ->actions([
                 Tables\Actions\EditAction::make(),
