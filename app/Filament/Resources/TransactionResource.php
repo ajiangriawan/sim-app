@@ -247,11 +247,20 @@ class TransactionResource extends Resource
             Tables\Columns\TextColumn::make('pendapatan_bersih')->label('Net')->money('IDR'),
             Tables\Columns\TextColumn::make('bonus_tonase')->label('Bonus')->money('IDR'),
         ])
+            ->filters([
+                Tables\Filters\SelectFilter::make('vehicle_id') // Gunakan nama kolom foreign key
+                    ->label('Filter No Lambung')
+                    ->relationship('vehicle', 'no_lambung') // Hubungkan ke relasi 'vehicle' dan tampilkan 'no_lambung'
+                    ->searchable() // Tambahkan fitur pencarian agar mudah mencari nomor lambung
+                    ->preload(),   // Load data di awal untuk UX yang lebih cepat
+            ])
             ->actions([
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make(),
             ]);
     }
+
+
 
     public static function getPages(): array
     {

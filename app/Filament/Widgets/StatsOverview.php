@@ -36,49 +36,33 @@ class StatsOverview extends BaseWidget
             ->when($dateFrom, fn($q) => $q->where('tanggal_service', '>=', $dateFrom))
             ->when($dateTo, fn($q) => $q->where('tanggal_service', '<=', $dateTo));
 
-        // 4. Logika Saldo
-        $saldoTersedia = 0;
-        if (empty($vehicleIds)) {
-            // Menghitung sisa saldo seluruh pihak
-            $totalDeposit = Deposit::sum('jumlah_deposit');
-            $totalUJ = Transaction::where('pakai_deposit', true)->sum('uang_jalan');
-            $saldoTersedia = $totalDeposit - $totalUJ;
-        } else {
-            $saldoTersedia = Deposit::getSaldoTersedia(); 
-        }
-
         return [
-            Stat::make('Total Pengiriman', $transactionQuery->count() . ' Rit')
+            Stat::make('Total Pengiriman / unit', $transactionQuery->count() . ' Rit ')
                 ->description($dateFrom ? 'Periode filter aktif' : 'Seluruh riwayat')
                 ->descriptionIcon('heroicon-m-check-circle')
                 ->icon('heroicon-o-truck')
                 ->color('primary'),
 
-            Stat::make('Total Tonase', number_format($transactionQuery->sum('tonase'), 0, ',', '.') . ' Ton')
-                ->description('Muatan terangkut')
-                ->descriptionIcon('heroicon-m-scale')
-                ->color('info'),
+            // Stat::make('Total Tonase', number_format($transactionQuery->sum('tonase'), 0, ',', '.') . ' Ton')
+            //     ->description('Muatan terangkut')
+            //     ->descriptionIcon('heroicon-m-scale')
+            //     ->color('info'),
 
             // TAMBAHAN: LABA KOTOR (OMSET)
-            Stat::make('Laba Kotor (Omset)', 'Rp ' . number_format($transactionQuery->sum('pendapatan_kotor'), 0, ',', '.'))
+            Stat::make('Laba Kotor / unit', 'Rp ' . number_format($transactionQuery->sum('pendapatan_kotor'), 0, ',', '.'))
                 ->description('Total pendapatan sebelum biaya')
                 ->descriptionIcon('heroicon-m-banknotes')
                 ->color('primary'),
 
-            Stat::make('Laba Bersih', 'Rp ' . number_format($transactionQuery->sum('pendapatan_bersih'), 0, ',', '.'))
+            Stat::make('Laba Bersih / unit', 'Rp ' . number_format($transactionQuery->sum('pendapatan_bersih'), 0, ',', '.'))
                 ->description('Net income setelah potongan')
                 ->descriptionIcon('heroicon-m-arrow-trending-up')
                 ->color('success'),
 
-            Stat::make('Total Biaya Service', 'Rp ' . number_format($serviceQuery->sum('total_biaya'), 0, ',', '.'))
+            Stat::make('Total Biaya Service / unit', 'Rp ' . number_format($serviceQuery->sum('total_biaya'), 0, ',', '.'))
                 ->description('Maintenance unit')
                 ->descriptionIcon('heroicon-m-wrench-screwdriver')
                 ->color('danger'),
-
-            Stat::make('Saldo Kas Deposit', 'Rp ' . number_format($saldoTersedia, 0, ',', '.'))
-                ->description('Sisa saldo tersedia')
-                ->icon('heroicon-o-wallet')
-                ->color($saldoTersedia < 0 ? 'danger' : 'success'),
         ];
     }
 }
