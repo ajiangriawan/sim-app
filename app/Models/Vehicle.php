@@ -10,17 +10,18 @@ class Vehicle extends Model
     protected $fillable = [
         'driver_id',
         'partai',
+        'nama_deposit_pilihan',
         'no_lambung',
         'no_plat',
         'kapasitas',
         'tahun',
-        'is_vendor',
+        // 'is_vendor',
         'status'
     ];
 
-    protected $casts = [
-        'is_vendor' => 'boolean',
-    ];
+    // protected $casts = [
+    //     'is_vendor' => 'boolean',
+    // ];
 
     public function driver()
     {
@@ -35,5 +36,10 @@ class Vehicle extends Model
     public function services()
     {
         return $this->hasMany(Service::class, 'vehicle_id');
+    }
+
+    public function deposit()
+    {
+        return $this->belongsTo(Deposit::class);
     }
 }

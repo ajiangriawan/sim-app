@@ -28,7 +28,7 @@ class TransactionResource extends Resource
         return $form->schema([
             /*
             |--------------------------------------------------------------------------
-            | INFORMASI UTAMA
+            | INFORMASI UTAMA & OPERASIONAL
             |--------------------------------------------------------------------------
             */
             Forms\Components\Section::make('Informasi Utama & Operasional')
@@ -36,6 +36,8 @@ class TransactionResource extends Resource
                     Forms\Components\TextInput::make('no_sjb')
                         ->label('No. SJB')
                         ->required()
+                        ->dehydrateStateUsing(fn(?string $state) => strtoupper($state ?? ''))
+                        ->extraInputAttributes(['style' => 'text-transform: uppercase'])
                         ->unique(ignoreRecord: true),
 
                     Forms\Components\DatePicker::make('tanggal')
@@ -49,7 +51,7 @@ class TransactionResource extends Resource
                         ->preload()
                         ->required()
                         ->live()
-                        // Memicu kalkulasi saat Edit (Hydrated) dan Update
+                        // Mengisi data Partai & Nama Deposit secara otomatis saat kendaraan dipilih
                         ->afterStateHydrated(fn(Set $set, $state, Get $get) => self::syncVehicleData($set, $state, $get))
                         ->afterStateUpdated(fn(Set $set, $state, Get $get) => self::syncVehicleData($set, $state, $get)),
 
@@ -60,7 +62,6 @@ class TransactionResource extends Resource
                         ->preload()
                         ->required()
                         ->live()
-                        // Memicu kalkulasi saat Edit (Hydrated) dan Update
                         ->afterStateHydrated(fn(Set $set, $state, Get $get) => self::syncRuteData($set, $state, $get))
                         ->afterStateUpdated(fn(Set $set, $state, Get $get) => self::syncRuteData($set, $state, $get)),
 
@@ -103,13 +104,20 @@ class TransactionResource extends Resource
                         ->visible(fn(Get $get) => $get('pakai_deposit'))
                         ->required(fn(Get $get) => $get('pakai_deposit'))
                         ->searchable()
-                        ->live(),
+                        ->preload()
+                        ->live()
+                        // KUNCI FIELD: Jika No Lambung sudah dipilih, user tidak bisa mengubah sumber dana ini
+                        ->disabled(fn(Get $get) => filled($get('vehicle_id')))
+                        // PENTING: Agar nilai tetap tersimpan ke database walaupun statusnya disabled
+                        ->dehydrated()
+                        ->helperText('Sumber dana dikunci sesuai data kendaraan yang dipilih.'),
 
                     Forms\Components\Placeholder::make('info_saldo')
                         ->label('Informasi Saldo')
                         ->visible(fn(Get $get) => $get('pakai_deposit') && $get('nama_deposit_pilihan'))
                         ->content(function (Get $get) {
                             $nama = $get('nama_deposit_pilihan');
+                            // Pastikan method getSaldoPerNama tersedia di model Deposit
                             $saldo = $nama ? Deposit::getSaldoPerNama($nama) : 0;
                             $potongan = (int) ($get('uang_jalan') ?? 0);
                             $sisa = $saldo - $potongan;
@@ -117,8 +125,8 @@ class TransactionResource extends Resource
 
                             return new HtmlString("
                                 <div class='text-sm'>
-                                    Saldo: <span class='font-bold text-primary-600'>Rp " . number_format($saldo, 0, ',', '.') . "</span><br>
-                                    Sisa: <span class='font-bold {$color}'>Rp " . number_format($sisa, 0, ',', '.') . "</span>
+                                    Saldo Saat Ini: <span class='font-bold text-primary-600'>Rp " . number_format($saldo, 0, ',', '.') . "</span><br>
+                                    Estimasi Sisa: <span class='font-bold {$color}'>Rp " . number_format($sisa, 0, ',', '.') . "</span>
                                 </div>
                             ");
                         }),
@@ -126,7 +134,7 @@ class TransactionResource extends Resource
 
             /*
             |--------------------------------------------------------------------------
-            | HASIL PERHITUNGAN
+            | HASIL PERHITUNGAN (HIDDEN & VIEW)
             |--------------------------------------------------------------------------
             */
             Forms\Components\Section::make('Hasil Perhitungan (Otomatis)')
@@ -135,7 +143,7 @@ class TransactionResource extends Resource
                     self::currencyPlaceholder('pendapatan_bersih', 'Net Income (Laba)'),
                     self::currencyPlaceholder('bonus_tonase', 'Bonus Tonase'),
 
-                    // State-only Hidden Fields (Tidak masuk DB tapi bantu hitung)
+                    // State-only Hidden Fields
                     Forms\Components\Hidden::make('partai_hidden'),
                     Forms\Components\Hidden::make('harga_tonase_hidden'),
                     Forms\Components\Hidden::make('jarak_hidden'),
@@ -154,17 +162,24 @@ class TransactionResource extends Resource
         ]);
     }
 
-    // Helper: Sinkronisasi Data Kendaraan
+    // Perbaikan: Fungsi sinkronisasi sekarang mengambil nama_deposit_pilihan
     protected static function syncVehicleData(Set $set, $state, Get $get): void
     {
         if ($state) {
             $vehicle = Vehicle::find($state);
-            $set('partai_hidden', $vehicle?->partai);
+            if ($vehicle) {
+                // Set Partai untuk hitung bonus
+                $set('partai_hidden', $vehicle->partai);
+
+                // Set Otomatis Nama Deposit dari Master Vehicle
+                if ($vehicle->nama_deposit_pilihan) {
+                    $set('nama_deposit_pilihan', $vehicle->nama_deposit_pilihan);
+                }
+            }
         }
         self::calculateRevenue($get, $set);
     }
 
-    // Helper: Sinkronisasi Data Rute
     protected static function syncRuteData(Set $set, $state, Get $get): void
     {
         if ($state) {
@@ -201,11 +216,9 @@ class TransactionResource extends Resource
             return;
         }
 
-        // 1. Hitung Omset
         $kotor = round($tonase * $jarak * $harga);
         $set('pendapatan_kotor', $kotor);
 
-        // 2. Hitung Bonus Partai
         $bonusTotal = 0;
         if ($hitungBonus && $partai) {
             $threshold = 0;
@@ -225,7 +238,6 @@ class TransactionResource extends Resource
         }
         $set('bonus_tonase', $bonusTotal);
 
-        // 3. Hitung Laba Bersih
         $bersih = $kotor - $uangJalan - $bonusTotal - $insentif;
         $set('pendapatan_bersih', round($bersih));
     }
@@ -246,21 +258,23 @@ class TransactionResource extends Resource
             Tables\Columns\TextColumn::make('tonase')->suffix(' Ton'),
             Tables\Columns\TextColumn::make('pendapatan_bersih')->label('Net')->money('IDR'),
             Tables\Columns\TextColumn::make('bonus_tonase')->label('Bonus')->money('IDR'),
+            Tables\Columns\TextColumn::make('nama_deposit_pilihan')
+                ->label('PC')
+                ->searchable()
+                ->sortable(),
         ])
             ->filters([
-                Tables\Filters\SelectFilter::make('vehicle_id') // Gunakan nama kolom foreign key
+                Tables\Filters\SelectFilter::make('vehicle_id')
                     ->label('Filter No Lambung')
-                    ->relationship('vehicle', 'no_lambung') // Hubungkan ke relasi 'vehicle' dan tampilkan 'no_lambung'
-                    ->searchable() // Tambahkan fitur pencarian agar mudah mencari nomor lambung
-                    ->preload(),   // Load data di awal untuk UX yang lebih cepat
+                    ->relationship('vehicle', 'no_lambung')
+                    ->searchable()
+                    ->preload(),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make(),
             ]);
     }
-
-
 
     public static function getPages(): array
     {

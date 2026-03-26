@@ -14,12 +14,13 @@ return new class extends Migration
         Schema::create('vehicles', function (Blueprint $table) {
             $table->id();
             $table->foreignId('driver_id')->nullable()->constrained()->nullOnDelete();
-            $table->string('partai')->unique();
+            $table->string('nama_deposit_pilihan')->nullable();
+            $table->string('partai');
             $table->string('no_lambung')->unique();
             $table->string('no_plat')->unique();
             $table->string('kapasitas');
             $table->year('tahun');
-            $table->boolean('is_vendor')->default(false); // Mengganti enum true/false menjadi boolean
+            // $table->boolean('is_vendor')->default(false); // Mengganti enum true/false menjadi boolean
             $table->enum('status', ['aktif', 'perbaikan', 'nonaktif'])->default('aktif');
             $table->timestamps();
         });

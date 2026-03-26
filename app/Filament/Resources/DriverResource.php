@@ -17,7 +17,7 @@ class DriverResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-user-group';
     protected static ?string $navigationGroup = 'Hauling';
     protected static ?string $pluralLabel = 'Input Data Supir';
-    protected static ?int $navigationSort = 7;
+    protected static ?int $navigationSort = 4;
 
     public static function form(Form $form): Form
     {
@@ -33,6 +33,8 @@ class DriverResource extends Resource
                         Forms\Components\TextInput::make('nama')
                             ->label('Nama Lengkap')
                             ->required()
+                            ->dehydrateStateUsing(fn (?string $state) => strtoupper($state))
+    ->extraInputAttributes(['style' => 'text-transform: uppercase'])
                             ->maxLength(255),
                         Forms\Components\TextInput::make('no_telp')
                             ->label('Nomor Telepon')
@@ -51,6 +53,8 @@ class DriverResource extends Resource
                     ->schema([
                         Forms\Components\Textarea::make('alamat')
                             ->required()
+                            ->dehydrateStateUsing(fn (?string $state) => strtoupper($state))
+    ->extraInputAttributes(['style' => 'text-transform: uppercase'])
                             ->columnSpanFull(),
                     ]),
             ]);

@@ -17,7 +17,7 @@ class WorkshopResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-home-modern';
     protected static ?string $navigationGroup = 'Hauling';
     protected static ?string $pluralLabel = 'Input Data Bengkel';
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = 8;
 
     public static function form(Form $form): Form
     {
@@ -30,12 +30,16 @@ class WorkshopResource extends Resource
                             ->label('Nama Bengkel')
                             ->required()
                             ->maxLength(255)
+                            ->dehydrateStateUsing(fn (?string $state) => strtoupper($state))
+    ->extraInputAttributes(['style' => 'text-transform: uppercase'])
                             ->placeholder('Contoh: Bengkel Maju Jaya'),
-                        
+
                         Forms\Components\TextInput::make('lokasi')
                             ->label('Lokasi/Alamat')
                             ->required()
                             ->maxLength(255)
+                            ->dehydrateStateUsing(fn (?string $state) => strtoupper($state))
+    ->extraInputAttributes(['style' => 'text-transform: uppercase'])
                             ->placeholder('Contoh: Jl. Sudirman No. 123, Jakarta'),
                     ])->columns(2),
             ]);

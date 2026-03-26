@@ -58,6 +58,8 @@ class DepositResource extends Resource
                             ->createOptionForm([
                                 Forms\Components\TextInput::make('nama_pihak')
                                     ->label('Nama Pihak Baru')
+                                    ->dehydrateStateUsing(fn(?string $state) => strtoupper($state))
+                                    ->extraInputAttributes(['style' => 'text-transform: uppercase'])
                                     ->required(),
                             ])
                             ->createOptionUsing(fn(array $data) => $data['nama_pihak']),
@@ -77,6 +79,8 @@ class DepositResource extends Resource
 
                         Forms\Components\Textarea::make('keterangan')
                             ->label('Keterangan / Sumber Dana')
+                            ->dehydrateStateUsing(fn(?string $state) => strtoupper($state))
+                            ->extraInputAttributes(['style' => 'text-transform: uppercase'])
                             ->placeholder('Contoh: Deposit Operasional Januari dari PT. XYZ')
                             ->required()
                             ->columnSpanFull(),

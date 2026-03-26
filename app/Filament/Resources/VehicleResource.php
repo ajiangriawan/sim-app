@@ -3,9 +3,11 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\VehicleResource\Pages;
+use App\Models\Deposit;
 use App\Models\Vehicle;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Forms\Get;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -17,7 +19,7 @@ class VehicleResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-truck';
     protected static ?string $navigationGroup = 'Hauling';
     protected static ?string $pluralLabel = 'Input Data Kendaraan';
-    protected static ?int $navigationSort = 6;
+    protected static ?int $navigationSort = 5;
 
     public static function form(Form $form): Form
     {
@@ -25,10 +27,6 @@ class VehicleResource extends Resource
             ->schema([
                 Forms\Components\Section::make('Detail Kendaraan')
                     ->schema([
-                        Forms\Components\Toggle::make('is_vendor')
-                            ->label('Apakah Vendor?')
-                            ->onColor('warning') // Warna saat aktif (Vendor)
-                            ->default(false),    // Default Inti
                         Forms\Components\Select::make('partai')
                             ->label('Partai')
                             ->options(
@@ -43,12 +41,16 @@ class VehicleResource extends Resource
                             ->createOptionForm([
                                 Forms\Components\TextInput::make('partai')
                                     ->label('Nama Pihak Baru')
+                                    ->dehydrateStateUsing(fn(?string $state) => strtoupper($state))
+                                    ->extraInputAttributes(['style' => 'text-transform: uppercase'])
                                     ->required(),
                             ])
                             ->createOptionUsing(fn(array $data) => $data['partai']),
                         Forms\Components\TextInput::make('no_plat')
                             ->label('Nomor Plat')
                             ->required()
+                            ->dehydrateStateUsing(fn(?string $state) => strtoupper($state))
+                            ->extraInputAttributes(['style' => 'text-transform: uppercase'])
                             ->unique(ignoreRecord: true)
                             ->placeholder('Contoh: BG 1234 AB'),
 
@@ -56,7 +58,15 @@ class VehicleResource extends Resource
                             ->label('Nomor Lambung')
                             ->required()
                             ->unique(ignoreRecord: true)
+                            ->dehydrateStateUsing(fn(?string $state) => strtoupper($state))
+                            ->extraInputAttributes(['style' => 'text-transform: uppercase'])
                             ->placeholder('Contoh: STL 123'),
+
+                        Forms\Components\Select::make('nama_deposit_pilihan')
+                            ->label('Pilih Saldo Atas Nama')
+                            ->options(Deposit::query()->distinct()->pluck('nama_pihak', 'nama_pihak')->toArray())
+                            ->searchable()
+                            ->live(),
 
                         Forms\Components\Select::make('driver_id')
                             ->label('Driver Utama')
@@ -101,6 +111,11 @@ class VehicleResource extends Resource
                     ->searchable()
                     ->sortable(),
 
+                Tables\Columns\TextColumn::make('nama_deposit_pilihan')
+                    ->label('PC')
+                    ->searchable()
+                    ->sortable(),
+
                 Tables\Columns\TextColumn::make('driver.nama')
                     ->label('Driver')
                     ->placeholder('Belum Ada Driver')
@@ -119,16 +134,6 @@ class VehicleResource extends Resource
                         'aktif' => 'Aktif',
                         'nonaktif' => 'Non-Aktif',
                     ]),
-                // Tables\Columns\TextColumn::make('status')
-                //     ->badge()
-                //     ->color(fn(string $state): string => match ($state) {
-                //         'aktif' => 'success',
-                //         'perbaikan' => 'danger',
-                //     }),
-                Tables\Columns\TextColumn::make('is_vendor')
-                    ->badge()
-                    ->color(fn($state): string => $state ? 'warning' : 'info')
-                    ->formatStateUsing(fn($state): string => $state ? 'Vendor' : 'Pusat'),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('status')

@@ -35,30 +35,30 @@ class ServiceResource extends Resource
                             ->label('No. Invoice')
                             ->default(fn() => self::generateInvoiceNumber())
                             ->required()
+                            ->dehydrateStateUsing(fn (?string $state) => strtoupper($state))
+    ->extraInputAttributes(['style' => 'text-transform: uppercase'])
                             ->unique(ignoreRecord: true),
 
                         Forms\Components\DatePicker::make('tanggal_service')
                             ->default(now())
                             ->required(),
 
-                        Forms\Components\Select::make('is_vendor')
-                            ->label('Tipe Kendaraan')
-                            ->options([
-                                1 => 'Vendor',
-                                0 => 'Pusat'
-                            ])
-                            ->default(0)
-                            ->live()
-                            ->required()
-                            ->afterStateUpdated(fn(Set $set) => $set('vehicle_id', null)),
+                        // Forms\Components\Select::make('is_vendor')
+                        //     ->label('Tipe Kendaraan')
+                        //     ->options([
+                        //         1 => 'Vendor',
+                        //         0 => 'Pusat'
+                        //     ])
+                        //     ->default(0)
+                        //     ->live()
+                        //     ->required()
+                        //     ->afterStateUpdated(fn(Set $set) => $set('vehicle_id', null)),
 
                         Forms\Components\Select::make('vehicle_id')
                             ->label('Unit Kendaraan')
                             ->relationship(
                                 name: 'vehicle',
                                 titleAttribute: 'no_lambung',
-                                modifyQueryUsing: fn(Get $get, $query) =>
-                                    $query->where('is_vendor', (bool) $get('is_vendor'))
                             )
                             ->searchable()
                             ->preload()
@@ -72,8 +72,8 @@ class ServiceResource extends Resource
                             ->required(),
 
                     ])
-                    ->columns(2)
-                    ->columnSpan(2),
+                    ->columns(4)
+                    ->columnSpanFull(),
 
                 Forms\Components\Repeater::make('items')
                     ->relationship()
@@ -82,6 +82,8 @@ class ServiceResource extends Resource
                         Forms\Components\TextInput::make('nama_item')
                             ->label('Nama Barang / Jasa')
                             ->required()
+                            ->dehydrateStateUsing(fn (?string $state) => strtoupper($state))
+    ->extraInputAttributes(['style' => 'text-transform: uppercase'])
                             ->columnSpan(2),
 
                         Forms\Components\TextInput::make('quantity')
@@ -124,7 +126,6 @@ class ServiceResource extends Resource
                                 $amount = (float) ($get('subtotal') ?? 0);
 
                                 return 'Rp ' . number_format($amount, 0, ',', '.');
-
                             }),
 
                         Forms\Components\Hidden::make('subtotal')
@@ -167,7 +168,6 @@ class ServiceResource extends Resource
                                     ',',
                                     '.'
                                 );
-
                             }),
 
                         Forms\Components\Placeholder::make('total_biaya_view')
@@ -175,7 +175,8 @@ class ServiceResource extends Resource
                             ->extraAttributes([
                                 'class' => 'text-xl font-bold text-primary-600'
                             ])
-                            ->content(fn(Get $get) =>
+                            ->content(
+                                fn(Get $get) =>
                                 'Rp ' . number_format(
                                     (float) ($get('total_biaya') ?? 0),
                                     0,
@@ -189,7 +190,8 @@ class ServiceResource extends Resource
 
                         Forms\Components\Placeholder::make('simulasi_sisa_saldo')
                             ->label('Estimasi Sisa Saldo')
-                            ->visible(fn(Get $get) =>
+                            ->visible(
+                                fn(Get $get) =>
                                 $get('pakai_deposit') && $get('nama_deposit_pilihan')
                             )
                             ->content(function (Get $get) {
@@ -208,10 +210,9 @@ class ServiceResource extends Resource
 
                                 return new HtmlString(
                                     "<span class='font-bold {$color}'>Rp "
-                                    . number_format($sisa, 0, ',', '.')
-                                    . "</span>"
+                                        . number_format($sisa, 0, ',', '.')
+                                        . "</span>"
                                 );
-
                             }),
 
                     ])
@@ -258,13 +259,23 @@ class ServiceResource extends Resource
     {
 
         $romans = [
-            1=>'I',2=>'II',3=>'III',4=>'IV',5=>'V',6=>'VI',
-            7=>'VII',8=>'VIII',9=>'IX',10=>'X',11=>'XI',12=>'XII'
+            1 => 'I',
+            2 => 'II',
+            3 => 'III',
+            4 => 'IV',
+            5 => 'V',
+            6 => 'VI',
+            7 => 'VII',
+            8 => 'VIII',
+            9 => 'IX',
+            10 => 'X',
+            11 => 'XI',
+            12 => 'XII'
         ];
 
         $noUrut = Service::count() + 1;
 
-        $padded = str_pad($noUrut,3,'0',STR_PAD_LEFT);
+        $padded = str_pad($noUrut, 3, '0', STR_PAD_LEFT);
 
         $bulan = $romans[date('n')];
 
@@ -302,7 +313,7 @@ class ServiceResource extends Resource
                     ),
 
             ])
-            ->defaultSort('tanggal_service','desc')
+            ->defaultSort('tanggal_service', 'desc')
             ->actions([
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make(),
@@ -312,9 +323,9 @@ class ServiceResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index'=>Pages\ListServices::route('/'),
-            'create'=>Pages\CreateService::route('/create'),
-            'edit'=>Pages\EditService::route('/{record}/edit'),
+            'index' => Pages\ListServices::route('/'),
+            'create' => Pages\CreateService::route('/create'),
+            'edit' => Pages\EditService::route('/{record}/edit'),
         ];
     }
 }
